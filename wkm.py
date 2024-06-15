@@ -62,7 +62,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
             EYY = exx(_y)
             EXY = exy(x, _y, pi)    
             obj_series.append(EXY)
-            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 (epoch+1)%50 == 0):
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
                 r = EXY / np.sqrt(EXX * EYY)
                 R2 = r ** 2
                 zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
@@ -233,7 +233,7 @@ def nearest_pi(C, pi0):
     count = 0
     while count < len(pi0) and not sigma == _sigma:
         count += 1
-        if count > 2:
+        if count > 5:
             print('--- note: nearest_pi reiteration', count)
         _sigma , sigma = sigma, best_assignment(C, sigma)
     return sigma_to_pi(sigma)

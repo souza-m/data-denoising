@@ -41,18 +41,35 @@ if plot_transport:
           ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
 
 # denoise
-curve_penalty = 4.
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=100, verbose=True, curve_penalty=curve_penalty)
+penalties = [.25, 1., 4., 16., 64.]
+x_series = []
+for curve_penalty in penalties[3:]:
+    x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=curve_penalty)
+    x_series.append(x)
 
-# plot curve
+# plot each curve with transport maps
 plot_transport = True
+for i, x in enumerate(x_series):
+    fig, ax = pl.subplots(figsize=[8, 6])
+    ax.set_title(f'Curve, penalty = {penalties[i]}')
+    ax.axis('equal')
+    ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+    ax.scatter(x=x[:,0], y=x[:,1], s=12, color='red', alpha=.5)
+    ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
+    if plot_transport:
+        for i in range(m):
+          for j in range(n):
+              ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
+
+# plot all curves in the same graph, no transport map
 fig, ax = pl.subplots(figsize=[8, 6])
-ax.set_title('Curve, theta = {theta}')
+ax.set_title('Curves')
 ax.axis('equal')
+for i in [0, 2, 4]:
+    x = x_series[i]
+    ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.5)
+ax.legend([f'penalty = {p}' for p in penalties])
+for i in [0, 2, 4]:
+    x = x_series[i]
+    ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
 ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
-ax.scatter(x=x[:,0], y=x[:,1], s=12, color='red', alpha=.5)
-ax.plot(x[:,0], x[:,1], color='red', alpha=.25)
-if plot_transport:
-    for i in range(m):
-      for j in range(n):
-          ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
