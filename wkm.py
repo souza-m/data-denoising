@@ -29,18 +29,15 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     n = len(y)
     v = kwargs.get('v', np.ones(n) / n)
     barycenter = np.dot(v, y)
-    y -= barycenter
-    if not x0 is None:
-        x0 -= barycenter
-    x = x0
-    pi = pi0
+    _y = y - barycenter
+    x = None if x0 is None else x0 - barycenter
     obj_series = []
     
     # principal curve with bounded curvature
     if method == 'curve':
  
         # only accepting uniform weights for the moment (ignoring parameter u)
-        u = np.ones(m) / m
+        curve_penalty = kwargs.get('curve_penalty', 0)
         
         # treat parameters
         alpha = .01
@@ -50,21 +47,22 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
             raise ValueError("initial position must have positive variance")
             
         # initial position and transport plan
-        xh = x0 / np.sqrt(exx(x0))
         pi = pi0
+        xh = x / np.sqrt(exx(x))
+        x = xh * exy(xh, _y, pi)   # rescale
         
         # iterate
         for epoch in range(epochs):
-            xh = update_xh(pi, y, xh, method, alpha, kwargs)
-            pi = update_pi(xh, y, v=v, u=u, old_pi=pi, method='nearest')
+            xh = update_xh(pi, _y, xh, method, curve_penalty, alpha)
+            pi = update_pi(xh, _y, 'nearest', pi0)
             
             # report
-            x = xh * exy(xh, y, pi)   # rescale
+            x = xh * exy(xh, _y, pi)   # rescale
             EXX = exx(x, pi.sum(axis=1))
-            EYY = exx(y)
-            EXY = exy(x, y, pi)    
+            EYY = exx(_y)
+            EXY = exy(x, _y, pi)    
             obj_series.append(EXY)
-            if verbose and (epochs <= 30 or epoch+1 <= 5 or (epoch+1)%10 == 0):
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 (epoch+1)%50 == 0):
                 r = EXY / np.sqrt(EXX * EYY)
                 R2 = r ** 2
                 zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
@@ -74,8 +72,6 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         print('--- not implemented ---')
     
     # wrap and return
-    if epochs == 0:
-        x = xh * exy(xh, y, pi)   # rescale
     if not x is None:
         x += barycenter
     return x, pi, obj_series
@@ -85,35 +81,40 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
 
 # update xh
 xh_methods = ['fixed_u', 'variable_u', 'curve']
-def update_xh(pi, y, xh0, method, alpha, **kwargs):
+def update_xh(pi, y, xh0, method, curve_penalty = 0, alpha = 1):
     m, n = pi.shape
     _, d = y.shape
     u = pi.sum(axis=1)
     
     # find new xh
     yhat = np.dot(pi, y)
-    if method in ['fixed_u', 'variable_u'] or (method == 'curve' and not 'curve_mult' in kwargs.keys()):
-        _xh = ellipse_max(yhat, u, centralized=True)
+    if method in ['fixed_u', 'variable_u'] or (method == 'curve' and curve_penalty == 0):
+        _xh = ellipse_max(yhat, u, centered=True)
     elif method == 'curve':
-        curve_mult = kwargs['curve_mult']
-        penalty = curve_mult * phi(xh0)
-        _xh = ellipse_max(yhat + penalty, u)
+        if xh0 is None:
+            print('--- error: xh0 must be given')
+        penalty = curve_penalty * phi(xh0)
+        _xh = ellipse_max(yhat - penalty, u)
     else:
         print('--- error: method not identified')
         return
         
     # check barycenter constraint
-    xh_bary = u[:,None] * _xh
+    xh_bary = (u[:,None] * _xh).sum(axis=0)
     assert np.isclose(xh_bary, np.zeros(d), atol=1e-6).all(), 'barycenter condition violated'
         
     # check second moment constraint
-    xh_secmon = sum(u * (_xh ** 2).sum(axis=0))
+    xh_secmon = sum((u[:,None] * _xh ** 2).sum(axis=0))
     assert np.isclose(xh_secmon, 1, atol=1e-6), 'second moment condition violated'
     if xh_secmon < 1 - 1e-6:
         print('--- warning: variance less than 1', xh_secmon)
     
     # partial update and return
-    xh = _xh if xh0 is None else alpha  * _xh + (1 - alpha) * xh0
+    if alpha == 1 or xh0 is None:
+        xh = _xh
+    else:
+        xh = alpha * _xh + (1. - alpha) * xh0
+        xh /= np.sqrt(exx(xh, pi.sum(axis=1)))
     return xh
 
 # min C.x
@@ -157,12 +158,14 @@ def phi(xh0):
 
 # update pi
 pi_methods = ['lp_free_u', 'sinkhorn_free_u', 'sinkhorn_fixed_u', 'nearest']
-def update_pi(xh, y, v, u, method, pi0 = None, alpha = 1):
-    m, n = len(xh), len(y)
+def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
     d, _d = xh.shape[1], y.shape[1]
     assert d == _d, 'dimension mismatch'
     
     if method == 'nearest':
+        if pi0 is None:
+            print('--- error: pi0 must be given')
+            return
         C = distance_matrix(xh, y)
         _pi = nearest_pi(C, pi0)
     elif method == 'sinkhorn_fixed_u':
@@ -171,11 +174,15 @@ def update_pi(xh, y, v, u, method, pi0 = None, alpha = 1):
         print('--- not implemented ---')
         return
     elif method == 'sinkhorn_free_u':
+        # v...
         # C = crossprod_matrix(xh, y)
         # xh_sq = np.sum(xh*xh, axis=1)
+        # _pi = np.maximum(_pi, 0.)
+        # _pi = _pi * v[None,:] / _pi.sum(axis=0)[None,:]
         print('--- not implemented ---')
         return
     elif method == 'lp_free_u':
+        # v...
         # C = crossprod_matrix(xh, y)
         # xh_sq = np.sum(xh*xh, axis=1)
         # _pi = lp_pi(C, v, xh, xh_sq, floor = 0, ceil = 1)
@@ -185,10 +192,8 @@ def update_pi(xh, y, v, u, method, pi0 = None, alpha = 1):
         print('methods: sinkhorn_fixed, sinkhorn_free, lp_free')
         return
     
-    # clean, update and return
-    _pi = np.maximum(_pi, 0.)
-    _pi = _pi * np.repeat(v / _pi.sum(axis=0), m).reshape([n, m]).T
-    pi = _pi if alpha == 1 or pi0 is None else alpha  * _pi + (1. - alpha) * pi0
+    # update and return
+    pi = _pi if pi0 is None else alpha  * _pi + (1. - alpha) * pi0
     return pi
 
 # sigma is the direct assignment
@@ -208,7 +213,6 @@ def sigma_to_pi(sigma):
 
 # assume that sigma0 is close to the solution (otherwise the problem is most likely np-hard)
 def best_assignment(C, sigma):
-    # NOTE: still not exact, needs a loop until no more swaps
     if len(sigma) == 1:
         return sigma
     m = len(sigma)
@@ -218,14 +222,21 @@ def best_assignment(C, sigma):
             # print('--- swap', sigma[0], sigma[i])
             sigma[0], sigma[i] = sigma[i], sigma[0]
             return best_assignment(C, sigma)
-    # _C = np.delete(C[1:,:], sigma[0], 1)
     return [sigma[0]] + best_assignment(C[1:,:], sigma[1:])
 
 # find exact optimal pi
 # pi0 must be composed of 0's and (1/n)'s
+# NOTE: still not exact
 def nearest_pi(C, pi0):
-    # return pi0
-    return sigma_to_pi(best_assignment(C, pi_to_sigma(pi0)))
+    _sigma = pi_to_sigma(pi0)
+    sigma = best_assignment(C, _sigma)
+    count = 0
+    while count < len(pi0) and not sigma == _sigma:
+        count += 1
+        if count > 2:
+            print('--- note: nearest_pi reiteration', count)
+        _sigma , sigma = sigma, best_assignment(C, sigma)
+    return sigma_to_pi(sigma)
 
 
 # --- external utility functions ---

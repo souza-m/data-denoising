@@ -41,16 +41,18 @@ if plot_transport:
           ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
 
 # denoise
-theta = 4.
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=200, verbose=True, theta=theta)
+curve_penalty = 4.
+x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=100, verbose=True, curve_penalty=curve_penalty)
 
 # plot curve
+plot_transport = True
 fig, ax = pl.subplots(figsize=[8, 6])
 ax.set_title('Curve, theta = {theta}')
 ax.axis('equal')
 ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
 ax.scatter(x=x[:,0], y=x[:,1], s=12, color='red', alpha=.5)
 ax.plot(x[:,0], x[:,1], color='red', alpha=.25)
-for i in range(m):
-  for j in range(n):
-      ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
+if plot_transport:
+    for i in range(m):
+      for j in range(n):
+          ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
