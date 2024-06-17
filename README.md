@@ -1,8 +1,9 @@
 # Data Denoising via Optimal Transport
 
+Examples of our approach to Principal Curves based on Optimal Transport.
 
-Example of principal cuve with orthogonal noise and bounded curvature. If the curvatuere bound goes to zero, or equivalently, the penalization term goes grows arbitrarily large, the solution approximates the projection points of the PCA method.
+Problem: Given a set of points $y=(y_j)$ with probability distribution $v=(v_j)$, we compute a representative set $x=(x_i)$, its probability $u=(u_i)$ and an optimal transport map $\pi=(\pi_{ij})$, $j=1,\ldots,n$, $i=1,\ldots,m$, $m\leq n$. $x$ satisfies constraints pertaining to the problem domain. $\pi$ minimizes the Wasserstein distance between $x$ and $y$, and the error term $\varepsilon=(\varepsilon_{ij})$ satisfies the orthogonality condition $\sum{i} \sum{j} pi_{ij} x_j} e_{ij} = 0$.
 
-Problem: Given a set of points $y=y_1,\ldots,y_n$, we compute a representative set $x=x_1,\ldots,x_m$, %m<n$ and an optimal "transport map", or joint probability that associates the $y$-points to the $x$-points in such a way that minimizes the Wasserstein distance between $x$ and $y$. The residuals $y-x$ are orthogonal to $x$ under the transport map. Visually, the resulting set is a curve that passes through the data and has limited curvature. If the curvature tolerance approximates zero, or equivalently, the penalty term goes to infinity, the solution approximates the projected points of the PCA problem. If the curvature tolerance is big enough, that is, does not affect the optimization, the problem becomes equivalent to the $K$-means. Details, theoretical support and additional examples will be published by June, 2024.
+Example 1 -- Bounded curvature. The amount of curvature of $x$, calculated by an appropriate function $\phi(x)$, is bounded. The resulting set forms a curve passing through the data and whose curvature is controlled by a parameter. If the curvature tolerance approximates zero, the solution approximates the projected points of the PCA problem. If the curvature tolerance is big enough that it becomes non-binding, the problem becomes equivalent to the $K$-means. Details, theoretical support and additional examples will be published by June, 2024.
 
-Foundational paper to be made public soon. Other examples may be added.
+Foundational paper and theoretical support to be made public soon. Other examples may be added.
