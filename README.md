@@ -4,6 +4,6 @@ Given a set of points $y=(y_j)\subset\mathbb{R}^d$ with probability distribution
 
 Example 1 - Bounded curvature. The amount of curvature measured by an appropriate function $\phi(x)$ is bounded/penalized. The resulting set forms a Principal Curve passing through the data that can be more or less curvy depending on a penalization parameter. If $m=n$ and the penalization is large, the curve becomes straight and the solution approximates the projected points of the PCA problem. Case $m < n$ to be added.
 
-Example 2 - $K$-means with fixed weights. Equivalent to the $K$-means with $K=m$, but all centroids have the given fixed weight (in this example, $\nicefrac{1}{m}$).
+Example 2 - $K$-means with fixed weights. Equivalent to the $K$-means with $K=m$, but all centroids have the given fixed weight (in this example, $1/m$).
 
 Foundational paper and theoretical support to be made public soon. Other examples may be added.
