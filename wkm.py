@@ -14,8 +14,8 @@ notation:
     y  (n,d) is the noisy data (input)
     x  (m,d) is the denoised set of points (solution)
     xh (m,d) is the auxiliary variable in the unit ellipse
-    v is the y-marginal probability distribution
     u is the x-marginal probability distribution
+    v is the y-marginal probability distribution
     pi (m,n) is the transport matrix
 '''
 
