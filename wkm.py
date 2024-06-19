@@ -36,10 +36,8 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     # principal curve with bounded curvature
     if method == 'curve':
  
-        # only accepting uniform weights for the moment (ignoring parameter u)
+        # parameters
         curve_penalty = kwargs.get('curve_penalty', 0)
-        
-        # treat parameters
         alpha = .01
         if x0 is None or pi0 is None:
             raise ValueError("initial position and transport plan must be provided")
@@ -53,11 +51,44 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # iterate
         for epoch in range(epochs):
-            xh = update_xh(pi, _y, xh, method, curve_penalty, alpha)
+            xh = update_xh(pi, _y, 'curve', xh, curve_penalty, alpha)
             pi = update_pi(xh, _y, 'nearest', pi0)
+            x = xh * exy(xh, _y, pi)   # rescale
             
             # report
+            EXX = exx(x, pi.sum(axis=1))
+            EYY = exx(_y)
+            EXY = exy(x, _y, pi)    
+            obj_series.append(EXY)
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
+                r = EXY / np.sqrt(EXX * EYY)
+                R2 = r ** 2
+                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
+                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
+    
+    # k-means with fixed weights
+    elif method == 'fixed_u':
+        
+        # parameter
+        u = kwargs.get('u', np.ones(m) / m)
+        
+        # initial position
+        if x0 is None:
+            # form initial pi
+            pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
+            xh = update_xh(pi, _y, 'direct')
+        else:
+            # given
+            x = x0
+            xh = x / np.sqrt(exx(x))
+        
+        # iterate
+        for epoch in range(epochs):
+            pi = update_pi(xh, _y, 'sinkhorn_fixed_u', u=u, v=v)
+            xh = update_xh(pi, _y, 'direct')
             x = xh * exy(xh, _y, pi)   # rescale
+            
+            # report
             EXX = exx(x, pi.sum(axis=1))
             EYY = exx(_y)
             EXY = exy(x, _y, pi)    
@@ -80,15 +111,15 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
 # --- optimization functions ---
 
 # update xh
-xh_methods = ['fixed_u', 'variable_u', 'curve']
-def update_xh(pi, y, xh0, method, curve_penalty = 0, alpha = 1):
+xh_methods = ['direct', 'curve']
+def update_xh(pi, y, method, xh0 = None, curve_penalty = 0, alpha = 1):
     m, n = pi.shape
     _, d = y.shape
     u = pi.sum(axis=1)
     
     # find new xh
     yhat = np.dot(pi, y)
-    if method in ['fixed_u', 'variable_u'] or (method == 'curve' and curve_penalty == 0):
+    if method == 'direct' or (method == 'curve' and curve_penalty == 0):
         _xh = ellipse_max(yhat, u, centered=True)
     elif method == 'curve':
         if xh0 is None:
@@ -152,11 +183,13 @@ def phi(xh0):
     anorm = [np.linalg.norm(a) for a in A]
     anorm = [norm if norm > 0 else np.infty for norm in anorm]
     E = [A[i+1] / anorm[i+1] - A[i] / anorm[i] for i in range(m-2)]
-    D = [np.zeros([1,d])] + [-e for e in E] + [np.zeros([1,d])]
+    D = [np.zeros([1,d])] + [-E[i] * (1 / anorm[i+1] + 1 / anorm[i]) for i in range(len(E))] + [np.zeros([1,d])]
     cpenalty = np.vstack(D)
     return cpenalty
 
-# update pi
+# call appropriate method to optimize pi
+# check constraints
+# update (partially if alpha < 1)
 pi_methods = ['lp_free_u', 'sinkhorn_free_u', 'sinkhorn_fixed_u', 'nearest']
 def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
     d, _d = xh.shape[1], y.shape[1]
@@ -169,10 +202,11 @@ def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
         C = distance_matrix(xh, y)
         _pi = nearest_pi(C, pi0)
     elif method == 'sinkhorn_fixed_u':
-        C = crossprod_matrix(xh, y)
-        # _pi = sinkhorn.sinkhorn_pi(C, v, u)
-        print('--- not implemented ---')
-        return
+        # rescale y in order to use a common entropy penalty parameter to Sinkhorn
+        # notice that xh is already normalized
+        _y = y / np.sqrt(exx(y))
+        C = crossprod_matrix(xh, _y)
+        _pi = sinkhorn.sinkhorn_pi(C, v, u)
     elif method == 'sinkhorn_free_u':
         # v...
         # C = crossprod_matrix(xh, y)

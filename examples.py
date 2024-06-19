@@ -40,15 +40,32 @@ if plot_transport:
       for j in range(n):
           ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
 
-# denoise
-penalties = [.25, 1., 4., 16., 64.]
+
+# denoise and plot
+penalty = .01
+x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=penalty)
+
+fig, ax = pl.subplots(figsize=[8, 6])
+ax.set_title(f'Curve, penalty = {penalty}')
+ax.axis('equal')
+ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+ax.scatter(x=x[:,0], y=x[:,1], s=12, color='red', alpha=.5)
+ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
+if plot_transport:
+    for i in range(m):
+      for j in range(n):
+          ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
+
+
+# multiple penalties
+penalties = [.0001, .0005, .0025, .01, .05]
 x_series = []
-for curve_penalty in penalties[3:]:
-    x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=curve_penalty)
+for curve_penalty in penalties:
+    x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=.01*curve_penalty)
     x_series.append(x)
 
 # plot each curve with transport maps
-plot_transport = True
+plot_transport = False
 for i, x in enumerate(x_series):
     fig, ax = pl.subplots(figsize=[8, 6])
     ax.set_title(f'Curve, penalty = {penalties[i]}')
@@ -73,3 +90,21 @@ for i in [0, 2, 4]:
     x = x_series[i]
     ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
 ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+
+
+# example 2 - k-means with fixed weights
+air = pd.read_csv('data/airquality.csv')
+air = air[['Ozone', 'Temp']].dropna()
+y = air.values
+n = len(y)
+m = int(np.sqrt(n))   # choose m < n
+
+# denoise
+x, pi, exy_series = wkm.fit(y, m, 'fixed_u', epochs=10, verbose=True)
+
+# plot
+fig, ax = pl.subplots(figsize=[8, 6])
+ax.set_title(f'Curve, penalty = {penalty}')
+ax.axis('equal')
+ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+ax.scatter(x=x[:,0], y=x[:,1], s=60, color='red', alpha=.5)

@@ -42,7 +42,7 @@ def navieSinkhorn(eta, mu, nu, C, dim_mu, dim_nu, num_iterations=1000, stopping_
             #if iteration % 100 == 0:
                 #print(f'The error at {iteration} th iteration is {error}')
             if error < stopping_criterion:
-                print(f'The number of iteration it use is {iteration}')
+                print(f'number of iterations {iteration}')
                 break
     
     P = np.exp((u[:, npn] + v[npn, :] - C) / eta) * mu[:, npn] * nu[npn, :]
@@ -50,7 +50,7 @@ def navieSinkhorn(eta, mu, nu, C, dim_mu, dim_nu, num_iterations=1000, stopping_
     return P
 
 # define a new sinkhorn_pi_2 function that use our own sinkhorn algorithm
-def sinkhorn_pi_(C, v, u, eta = .06, max_iters = 100):
+def sinkhorn_pi(C, v, u, eta = .01, max_iters = 100):
     m, n = C.shape
     v = v.reshape(n, 1)       # to matrix n x 1
     u = u.reshape(m, 1)       # to matrix m x 1
