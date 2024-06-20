@@ -37,6 +37,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     if method == 'curve':
  
         # parameters
+        u = kwargs.get('u', np.ones(m) / m)
         curve_penalty = kwargs.get('curve_penalty', 0)
         alpha = .01
         if x0 is None or pi0 is None:
@@ -52,7 +53,10 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         # iterate
         for epoch in range(epochs):
             xh = update_xh(pi, _y, 'curve', xh, curve_penalty, alpha)
-            pi = update_pi(xh, _y, 'nearest', pi0)
+            if m == n:
+                pi = update_pi(xh, _y, 'nearest', pi0)
+            else:
+                pi = update_pi(xh, _y, 'sinkhorn_fixed_u', pi0, u, v)
             x = xh * exy(xh, _y, pi)   # rescale
             
             # report

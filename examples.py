@@ -18,17 +18,19 @@ air = air[['Ozone', 'Temp']].dropna()
 y = air.values
 pca = PCA(n_components=1)
 f = pca.fit_transform(y)
-x = pca.inverse_transform(f)   # pca.mean_ + f * pca.components_
+x_pca = pca.inverse_transform(f)   # pca.mean_ + f * pca.components_
 n = m = len(y)
 
 # reorder x and pi
 order = np.argsort(f[:,0])
-x = x[order]
+x_pca = x_pca[order]
 y = y[order]
 pi = np.eye(m) / m
 
+
 # plot pca
-plot_transport = False
+x = x_pca.copy()
+plot_transport = True
 fig, ax = pl.subplots(figsize=[8, 6])
 ax.set_title('PCA')
 ax.axis('equal')
@@ -41,7 +43,7 @@ if plot_transport:
           ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
 
 
-# denoise and plot
+# generate curve and plot
 penalty = .01
 x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=penalty)
 
@@ -57,7 +59,66 @@ if plot_transport:
           ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
 
 
-# multiple penalties
+# generate curve, m < n
+m = int(np.sqrt(n))
+
+# start with ordered x_pca
+# join centroids to reduce number of x-points from n to m
+pi = np.zeros([m, n])
+max_row = 1/m
+max_col = 1/n
+i = 0
+j = 0
+total_row = 0.
+total_col = 0.
+total = 0.
+while total < 1 - 1e-6:
+    new_w = min(max_row - total_row, max_col - total_col)
+    pi[i,j] = new_w
+    total_row += new_w
+    total_col += new_w
+    total += new_w
+    if np.isclose(total_row, max_row):
+        # step down
+        i += 1
+        total_row = 0.
+    else:
+        # step right
+        j += 1
+        total_col = 0.
+bary = x_pca.mean(axis=0)
+x = bary + np.dot(pi, x_pca - bary) * n / m
+
+# plot initial position
+plot_transport = True
+fig, ax = pl.subplots(figsize=[8, 6])
+ax.set_title('PCA')
+ax.axis('equal')
+ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+ax.scatter(x=x[:,0], y=x[:,1], s=22, color='red', alpha=.99)
+ax.plot(x[:,0], x[:,1], color='red', alpha=.25)
+if plot_transport:
+    for i in range(m):
+      for j in range(n):
+          ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
+# looks shifted left...
+
+penalty = .01
+x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=20, verbose=True, curve_penalty=penalty)
+
+fig, ax = pl.subplots(figsize=[8, 6])
+ax.set_title(f'Curve, penalty = {penalty}')
+ax.axis('equal')
+ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+ax.scatter(x=x[:,0], y=x[:,1], s=12, color='red', alpha=.5)
+ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
+if plot_transport:
+    for i in range(m):
+      for j in range(n):
+          ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
+
+
+# curves with multiple penalties
 penalties = [.0001, .0005, .0025, .01, .05]
 x_series = []
 for curve_penalty in penalties:
@@ -104,7 +165,7 @@ x, pi, exy_series = wkm.fit(y, m, 'fixed_u', epochs=10, verbose=True)
 
 # plot
 fig, ax = pl.subplots(figsize=[8, 6])
-ax.set_title(f'Curve, penalty = {penalty}')
+ax.set_title('Fixed-weights K-means')
 ax.axis('equal')
 ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
 ax.scatter(x=x[:,0], y=x[:,1], s=60, color='red', alpha=.5)
