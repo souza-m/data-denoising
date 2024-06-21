@@ -6,6 +6,7 @@ Created on Sep-2023
 """
 
 import numpy as np
+from scipy.optimize import linprog as lp
 import sinkhorn
 from sklearn import metrics
 
@@ -27,6 +28,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     
     # initialize and centralize
     n = len(y)
+    u = kwargs.get('u', np.ones(m) / m)
     v = kwargs.get('v', np.ones(n) / n)
     barycenter = np.dot(v, y)
     _y = y - barycenter
@@ -37,7 +39,6 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     if method == 'curve':
  
         # parameters
-        u = kwargs.get('u', np.ones(m) / m)
         curve_penalty = kwargs.get('curve_penalty', 0)
         alpha = .01
         if x0 is None or pi0 is None:
@@ -71,10 +72,40 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
     
     # k-means with fixed weights
-    elif method == 'fixed_u':
+    elif method in ['fixed_u', 'variable_u']:
         
-        # parameter
-        u = kwargs.get('u', np.ones(m) / m)
+        # initial position
+        if x0 is None:
+            # form some random pi
+            pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
+            xh = update_xh(pi, _y, 'direct')
+        else:
+            # given
+            x = x0
+            xh = x / np.sqrt(exx(x))
+        
+        # iterate
+        for epoch in range(epochs):
+            if method == 'fixed_u':
+                pi = update_pi(xh, _y, 'sinkhorn_fixed_u', u=u, v=v)
+            else:
+                pi = update_pi(xh, _y, 'lp_free_u', v=v)
+            xh = update_xh(pi, _y, 'direct')
+            x = xh * exy(xh, _y, pi)   # rescale
+            
+            # report
+            EXX = exx(x, pi.sum(axis=1))
+            EYY = exx(_y)
+            EXY = exy(x, _y, pi)    
+            obj_series.append(EXY)
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
+                r = EXY / np.sqrt(EXX * EYY)
+                R2 = r ** 2
+                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
+                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
+    
+    # k-means with variable weights
+    elif method == 'variable_u':
         
         # initial position
         if x0 is None:
@@ -194,7 +225,7 @@ def phi(xh0):
 # call appropriate method to optimize pi
 # check constraints
 # update (partially if alpha < 1)
-pi_methods = ['lp_free_u', 'sinkhorn_free_u', 'sinkhorn_fixed_u', 'nearest']
+pi_methods = ['lp_free_u', 'sinkhorn_fixed_u', 'nearest']
 def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
     d, _d = xh.shape[1], y.shape[1]
     assert d == _d, 'dimension mismatch'
@@ -210,22 +241,11 @@ def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
         # notice that xh is already normalized
         _y = y / np.sqrt(exx(y))
         C = crossprod_matrix(xh, _y)
-        _pi = sinkhorn.sinkhorn_pi(C, v, u)
-    elif method == 'sinkhorn_free_u':
-        # v...
-        # C = crossprod_matrix(xh, y)
-        # xh_sq = np.sum(xh*xh, axis=1)
-        # _pi = np.maximum(_pi, 0.)
-        # _pi = _pi * v[None,:] / _pi.sum(axis=0)[None,:]
-        print('--- not implemented ---')
-        return
+        xh_sq = np.sum(xh**2, axis=1)
+        _pi = lp_pi(C, v, xh, xh_sq)
     elif method == 'lp_free_u':
-        # v...
-        # C = crossprod_matrix(xh, y)
-        # xh_sq = np.sum(xh*xh, axis=1)
-        # _pi = lp_pi(C, v, xh, xh_sq, floor = 0, ceil = 1)
-        print('--- not implemented ---')
-        return
+        C = crossprod_matrix(xh, y)
+        _pi = sinkhorn.sinkhorn_pi(C, v)
     else:
         print('methods: sinkhorn_fixed, sinkhorn_free, lp_free')
         return
@@ -275,6 +295,44 @@ def nearest_pi(C, pi0):
             print('--- note: nearest_pi reiteration', count)
         _sigma , sigma = sigma, best_assignment(C, sigma)
     return sigma_to_pi(sigma)
+
+# optimize pi with y-maginal fixed, linear program (or quadratic if pi_ij is penalized)
+# xh_sq is the vector of |xi|**2
+# pi is bounded as
+#    sum_i sum_j pi_ij * xhi = 0
+#    sum_i sum_j pi_ij * xh_sq_i <= 1
+def lp_pi(C, v, xh, xh_sq, floor = 0, ceil = 1):
+    m, n = C.shape
+    d = xh.shape[1]
+    
+    q = C.copy()
+    q.resize(m * n)
+    
+    # y-marginal constraint
+    A1 = np.vstack([np.tile(np.hstack([np.zeros(i), np.ones(1), np.zeros((n-i-1))]), m) for i in range(n)])
+    b1 = v
+    
+    # centered_x constraint
+    Z = [np.repeat(xh[:,k], n) for k in range(d)]
+    A2 = np.vstack(Z)
+    b2 = np.zeros(d)
+    
+    # second moment as an equality
+    A3 = np.repeat(xh_sq, n)
+    A3.resize(1, len(A3))
+    b3 = np.ones(1)
+    
+    A = np.vstack([A1, A2, A3])
+    b = np.concatenate([b1, b2, b3])
+
+    # format:
+    #  min  q' pi
+    #  st   A_ub pi <= b_ub
+    #       A_eq pi == b_eq
+    lp_resut = lp(c=q, A_eq=A, b_eq=b)
+    pi = lp_resut['x'].reshape((m, n))
+        
+    return pi
 
 
 # --- external utility functions ---
