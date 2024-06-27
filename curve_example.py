@@ -51,8 +51,8 @@ for i in range(m):
 m = n
 x = x_pca.copy()
 pi = np.eye(m) / m
-penalty = .01
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=penalty)
+penalty = .002
+x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=5000, verbose=True, curve_penalty=penalty)
 x_sample.append(x)
 
 x = x_pca.copy()
