@@ -40,7 +40,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
  
         # parameters
         curve_penalty = kwargs.get('curve_penalty', 0)
-        alpha = .01
+        alpha = .0001
         if x0 is None or pi0 is None:
             raise ValueError("initial position and transport plan must be provided")
         if exx(x0) == 0:
@@ -53,19 +53,28 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # iterate
         for epoch in range(epochs):
-            xh = update_xh(pi, _y, 'curve', xh, curve_penalty, alpha)
-            if m == n:
-                pi = update_pi(xh, _y, 'nearest', pi0)
-            else:
-                pi = update_pi(xh, _y, 'sinkhorn_fixed_u', pi0, u, v)
+            _xh = update_xh(pi, _y, 'curve', xh, curve_penalty, alpha)
+            if epoch % 100 == 0:
+                d = _xh.shape[1]
+                dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
+                print(dif)
+                if dif < 1e-5:
+                    print('convergence achieved')
+                    break
+            xh = _xh
             x = xh * exy(xh, _y, pi)   # rescale
+            if epoch % 1 == 0:
+                if m == n:
+                    pi = update_pi(xh, _y, 'nearest', pi0)
+                else:
+                    pi = update_pi(xh, _y, 'sinkhorn_fixed_u', pi0, u, v)
             
             # report
             EXX = exx(x, pi.sum(axis=1))
             EYY = exx(_y)
             EXY = exy(x, _y, pi)    
             obj_series.append(EXY)
-            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%100 == 0):
                 r = EXY / np.sqrt(EXX * EYY)
                 R2 = r ** 2
                 zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
