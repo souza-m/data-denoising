@@ -54,7 +54,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         # iterate
         for epoch in range(epochs):
             _xh = update_xh(pi, _y, 'curve', xh, curve_penalty, alpha)
-            if epoch % 100 == 0:
+            if epoch % 1000 == 0:
                 d = _xh.shape[1]
                 dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
                 print(dif)
@@ -63,7 +63,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                     break
             xh = _xh
             x = xh * exy(xh, _y, pi)   # rescale
-            if epoch % 1 == 0:
+            if epoch % 10 == 0:
                 if m == n:
                     pi = update_pi(xh, _y, 'nearest', pi0)
                 else:
