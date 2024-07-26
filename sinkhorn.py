@@ -50,10 +50,10 @@ def navieSinkhorn(eta, mu, nu, C, dim_mu, dim_nu, num_iterations=1000, stopping_
     return P
 
 # define a new sinkhorn_pi_2 function that use our own sinkhorn algorithm
-def sinkhorn_pi(C, v, u, eta = .05, max_iters = 100):
+def sinkhorn_pi(C, u, v, eta = .05, max_iters = 100):
     m, n = C.shape
-    v = v.reshape(n, 1)       # to matrix n x 1
     u = u.reshape(m, 1)       # to matrix m x 1
+    v = v.reshape(n, 1)       # to matrix n x 1
     pi = navieSinkhorn(eta, u, v, C, m, n)
     return pi
     tol = 1e-8

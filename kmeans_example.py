@@ -30,7 +30,7 @@ m = int(np.sqrt(n))   # choose m < n
 # example 1 - fixed weights
 
 # fit and plot
-x, pi, exy_series = wkm.fit(y, m, 'fixed_u', epochs=20, verbose=True)
+x, pi, exy_series = wkm.fit(y, 100, 'fixed_u', epochs=5, verbose=True)
 
 fig, ax = pl.subplots(figsize=[8, 6])
 ax.set_title('Fixed-weights K-means')
