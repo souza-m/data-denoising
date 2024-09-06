@@ -27,11 +27,13 @@ f = pca.fit_transform(y)
 x_pca = pca.inverse_transform(f)   # pca.mean_ + f * pca.components_
 n = len(y)
 
-# reorder x and pi
+# reorder x and pi in the order of the principal axis
 order = np.argsort(f[:,0])
 x_pca = x_pca[order]
 y = y[order]
 
+# build a set of solutions with increasing curvature
+# start with pca
 x_sample = [x_pca]
 
 # plot pca
@@ -39,16 +41,6 @@ m = n
 x = x_pca.copy()
 pi = np.eye(n) / n
 plot_transport = True
-fig, ax = pl.subplots(figsize=[10, 6])
-ax.set_title('PCA')
-ax.axis('equal')
-ax.scatter(x=x[:,0], y=x[:,1], color='red', s=12, alpha=.5)
-ax.plot(x[:,0], x[:,1], color='red', alpha=.25)
-ax.scatter(x=y[:,0], y=y[:,1], color='black', s=12, marker='s', alpha=.25)
-for i in range(m):
-  for j in range(n):
-      ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
-
 
 fig, ax = pl.subplots(figsize=[10, 6])
 ax.set_title('PCA')
@@ -61,18 +53,19 @@ for i in range(m):
       ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
 
 
-m = n                   # example 1: m = n
+# example 1: m = n
+m = n
 
-x = x_pca.copy()
+x0 = x_pca.copy()
 pi = np.eye(m) / m
 penalty = .05
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=5000, verbose=True, curve_penalty=penalty)
+x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x0, pi0=pi, epochs=5000, verbose=True, curve_penalty=penalty)
 x_sample.append(x)
 
-x = x_pca.copy()
+x0 = x_pca.copy()
 pi = np.eye(m) / m
 penalty = .002
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=5000, verbose=True, curve_penalty=penalty)
+x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x0, pi0=pi, epochs=5000, verbose=True, curve_penalty=penalty)
 x_sample.append(x)
 
 # orthogonality condition test
@@ -153,28 +146,16 @@ x_sample_low_m.append(x)
 
 
 # plot pca and two curves, no transport lines
-fig, ax = pl.subplots(figsize=[10, 6])
-ax.set_title('Curves and PCA')
-ax.axis('equal')
-for x in x_sample_low_m:
-    # ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.5)
-    ax.plot(x[:,0], x[:,1], alpha=.5)
-ax.legend(['PCA', 'penalty = 0.002', 'penalty = 0.05'])
-for x in x_sample_low_m:
-    ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.5)
-ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
-
-# red pattern (presentation consistency)
 fig, ax = pl.subplots(figsize=[7, 4])
 ax.set_title('Curves and PCA')
 ax.axis('equal')
-ax.plot(x_sample[0][:,0], x_sample[0][:,1], color='red', alpha=.5)
-for x in x_sample[1:][::-1]:
+ax.plot(x_sample_low_m[0][:,0], x_sample_low_m[0][:,1], color='red', alpha=.5)
+for x in x_sample_low_m[1:][::-1]:
     # ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.5)
     ax.plot(x[:,0], x[:,1], alpha=.5)
 ax.legend(['PCA', 'penalty = 0.05', 'penalty = 0.002'])
-ax.scatter(x=x_sample[0][:,0], y=x_sample[0][:,1], color='red', s=12, alpha=.5)
-for x in x_sample[1:][::-1]:
+ax.scatter(x=x_sample_low_m[0][:,0], y=x_sample_low_m[0][:,1], color='red', s=12, alpha=.5)
+for x in x_sample_low_m[1:][::-1]:
     ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.5)
 ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
 
@@ -208,30 +189,3 @@ ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
 for i in range(m):
   for j in range(n):
       ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
-
-
-
-
-
-# # self-consistent PCA
-
-# m = n
-# x = x_pca
-# a = pca.components_[0]
-# A = np.dot(a.reshape([len(a), 1]), a.reshape([1, len(a)])) / (np.linalg.norm(a) ** 2)   # projection matrix
-
-# # # centralize y
-# # barycenter = y.mean(axis=0)
-# # yc = y - barycenter
-
-# # # we are interested in the projection of y to the principal axis
-# # yp = np.vstack([np.dot(A, yc[j,:]) for j in range(n)])
-# # yp = yp + barycenter
-
-# x, pi, exy_series = wkm.fit(y, m, 'self_consistent_pca', epochs=20, verbose=True, principal_direction=a)
-# fig, ax = pl.subplots(figsize=[8, 6])
-# ax.set_title('Self-consistent PCA')
-# ax.axis('equal')
-# ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
-# ax.scatter(x=x[:,0], y=x[:,1], s=22, color='red', alpha=.99)
-# ax.plot(x[:,0], x[:,1], color='red', alpha=.25)

@@ -36,7 +36,7 @@ fig, ax = pl.subplots(figsize=[8, 6])
 ax.set_title('Fixed-weights K-means')
 ax.axis('equal')
 ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
-ax.scatter(x=x[:,0], y=x[:,1], s=60, color='red', alpha=.5)
+ax.scatter(x=x[:,0], y=x[:,1], s=50, color='red', alpha=.5)
 
 # example 2 - variable weights (traditional)
 # this is just a proof of concept
@@ -44,7 +44,7 @@ ax.scatter(x=x[:,0], y=x[:,1], s=60, color='red', alpha=.5)
 # fit and plot with centroid size proportional to its mass
 
 # fit
-x, pi, exy_series = wkm.fit(y, m, 'fixed_u', epochs=20, verbose=True)
+x, pi, exy_series = wkm.fit(y, m, 'variable_u', epochs=20, verbose=True)
 u = pi.sum(axis=1)
 wkc, pi = wkm.wk_classify(y, x, pi = pi)
 
