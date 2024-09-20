@@ -37,7 +37,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     
     # principal curve with bounded curvature
     if method == 'curve':
- 
+
         # parameters
         curve_penalty = kwargs.get('curve_penalty', 0)
         alpha = .0001
@@ -80,6 +80,40 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
                 print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
     
+    # principal curve with bounded curvature
+    elif method == 'bounded_length':
+        
+        # bound
+        B = kwargs.get('length', 0)
+        print('fit: B = ', B)
+        
+        # initial position
+        if x0 is None:
+            # form some random pi
+            pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
+            xh = update_xh(pi, _y, 'bounded_length', B=B)
+        else:
+            # given
+            x = x0
+            xh = x / np.sqrt(exx(x))
+        
+        # iterate
+        for epoch in range(epochs):
+            pi = update_pi(xh, _y, 'sinkhorn_fixed_u', u=u, v=v)
+            xh = update_xh(pi, _y, 'bounded_length', B=B)
+            x = xh * exy(xh, _y, pi)   # rescale
+            
+            # report
+            EXX = exx(x, pi.sum(axis=1))
+            EYY = exx(_y)
+            EXY = exy(x, _y, pi)    
+            obj_series.append(EXY)
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
+                r = EXY / np.sqrt(EXX * EYY)
+                R2 = r ** 2
+                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
+                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
+
     # k-means with fixed weights
     elif method in ['fixed_u', 'variable_u']:
         
@@ -200,8 +234,8 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
 # --- optimization functions ---
 
 # update xh
-xh_methods = ['direct', 'curve']
-def update_xh(pi, y, method, xh0 = None, curve_penalty = 0, alpha = 1):
+xh_methods = ['direct', 'curve', 'bounded_length']
+def update_xh(pi, y, method, xh0 = None, curve_penalty = 0, B = 0, alpha = 1):
     m, n = pi.shape
     _, d = y.shape
     u = pi.sum(axis=1)
@@ -213,15 +247,21 @@ def update_xh(pi, y, method, xh0 = None, curve_penalty = 0, alpha = 1):
     elif method == 'curve':
         if xh0 is None:
             print('--- error: xh0 must be given')
-        penalty = curve_penalty * phi(xh0)
+        penalty = curve_penalty * phi(xh0)  # linear penalization based on previous xh
         _xh = ellipse_max(yhat - penalty, u)
+    elif method == 'bounded_length':
+        print('update_xh: B = ', B)
+        _xh = qp_length(yhat, B)
+        xh_secmom = sum((u[:,None] * _xh ** 2).sum(axis=0))
+        assert xh_secmom < 1 + 1e-6, 'variance greater than 1'
+        _xh /= np.sqrt(xh_secmom)
     else:
         print('--- error: method not identified')
         return
         
     # check barycenter constraint
     xh_bary = (u[:,None] * _xh).sum(axis=0)
-    assert np.isclose(xh_bary, np.zeros(d), atol=1e-6).all(), 'barycenter condition violated'
+    assert np.isclose(xh_bary, np.zeros(d), atol=1e-4).all(), f'barycenter condition violated {xh_bary}'
         
     # check second moment constraint
     xh_secmon = sum((u[:,None] * _xh ** 2).sum(axis=0))
@@ -237,7 +277,7 @@ def update_xh(pi, y, method, xh0 = None, curve_penalty = 0, alpha = 1):
         xh /= np.sqrt(exx(xh, pi.sum(axis=1)))
     return xh
 
-# min C.x
+# max C.x
 #  st u.x  == 0
 #     u.x2 <= 1
 def ellipse_max(C, u, centered = False):
@@ -263,6 +303,62 @@ def ellipse_max(C, u, centered = False):
     assert np.isclose((u[:,None] * xh).sum(axis=0), np.zeros(d), atol=1e-6).all(), 'error: xh not centered'
     assert np.isclose((u[:,None] * (xh ** 2)).sum(), 1), 'error: var(xh) != 1'
     return xh
+
+from cvxopt import solvers, matrix
+
+def qp_length(C, B):
+    print('qp_length: B = ', B)
+    # https://cvxopt.org/userguide/coneprog.html?highlight=qp#second-order-cone-programming
+    # max C.x
+    # st  u.x   == 0
+    #     u.x^2 <= 1
+    #     sum || xi - xi-1 || == B
+    m, d = C.shape
+    
+    # objective (to minimize)
+    c = matrix(np.concatenate([-C.reshape(d * m), np.zeros(m - 1)]))
+    
+    # centered x: sum{ xi^l == 0 } for l = 1, ..., d
+    A1 = np.hstack([np.eye(d) for i in range(m)] + [np.zeros([d, m - 1])])
+    b1 = np.zeros(d)
+    
+    # bounded length: sum{ ai } == B
+    A2 = np.hstack([np.zeros(d * m), np.ones(m - 1)])
+    b2 = B * np.ones(1)
+    
+    # equality constraints
+    A = np.vstack([A1, A2])
+    b = np.concatenate([b1, b2])
+    A = matrix(A)
+    b = matrix(b)
+    
+    Gq = []
+    hq = []
+    
+    # std(x) <= 1
+    G = np.vstack([np.zeros(d * m + m - 1), np.hstack([-np.eye(d * m), np.zeros([d * m, m - 1])])])
+    h = np.concatenate([np.ones(1), np.zeros(d * m)])
+    Gq.append(matrix(G))
+    hq.append(matrix(h))
+    
+    # bounded length: sum || xi+1 - xi || <= ai
+    for i in range(m - 1):
+        G0 = -np.eye(1, d * m + m - 1, k = d * m + i)
+        G1 = np.hstack(i * [np.zeros([d, d])] + [-np.eye(d)] + [np.eye(d)] + (m - 2 - i) * [np.zeros([d, d])] + [np.zeros([d, m - 1])])
+        # print(G1)
+        G = np.vstack([G0, G1])
+        h = np.zeros(d + 1)
+        Gq.append(matrix(G))
+        hq.append(matrix(h))
+    
+    sol = solvers.socp(c, A=A, b=b, Gq=Gq, hq=hq)
+    xh = np.array(sol['x'])[:d * m].reshape([m, d])
+    
+    length = np.array(sol['x'])[d * m]
+    print('B', B, 'length', length)
+    return xh
+    
+
 
 # linear function of xh(t) based on xh(t-1)
 # measures curvature

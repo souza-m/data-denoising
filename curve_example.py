@@ -85,7 +85,7 @@ for i in range(m):
 
 # plot pca and two curves, no transport lines
 fig, ax = pl.subplots(figsize=[8, 4])
-ax.set_prop_cycle(cc)
+ax.set_prop_cycle(cc) 
 ax.set_title('Curves and PCA')
 ax.axis('equal')
 for x in x_sample:
@@ -189,3 +189,26 @@ ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
 for i in range(m):
   for j in range(n):
       ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
+
+
+
+
+
+# bounded length
+m = n
+B=.4
+
+fig, ax = pl.subplots(figsize=[8, 6])
+ax.axis('equal')
+ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+for B in [.2, .3, .4, .5]:
+    x0 = x_pca.copy()
+    pi0 = np.eye(m) / m
+    x, pi, exy_series = wkm.fit(y, m, 'bounded_length', x0=x0, pi0=pi0, epochs=5, verbose=False, length=B)
+    
+    # plot
+    ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.5)
+    ax.plot(x[:,0], x[:,1], alpha=.5)
+# for i in range(m):
+#   for j in range(n):
+#       ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
