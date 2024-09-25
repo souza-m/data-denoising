@@ -42,7 +42,7 @@ x = x_pca.copy()
 pi = np.eye(n) / n
 plot_transport = True
 
-fig, ax = pl.subplots(figsize=[10, 6])
+fig, ax = pl.subplots(figsize=[8, 6])
 ax.set_title('PCA')
 ax.axis('equal')
 ax.scatter(x=x[:,0], y=x[:,1], color='#348ABD', s=12, alpha=.5)
@@ -59,13 +59,13 @@ m = n
 x0 = x_pca.copy()
 pi = np.eye(m) / m
 penalty = .05
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x0, pi0=pi, epochs=5000, verbose=True, curve_penalty=penalty)
+x, pi, exy_series = wkm.fit(y, m, 'curvature', x0=x0, pi0=pi, epochs=500, verbose=True, curvature_penalty=penalty)
 x_sample.append(x)
 
 x0 = x_pca.copy()
 pi = np.eye(m) / m
 penalty = .002
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x0, pi0=pi, epochs=5000, verbose=True, curve_penalty=penalty)
+x, pi, exy_series = wkm.fit(y, m, 'curvature', x0=x0, pi0=pi, epochs=500, verbose=True, curvature_penalty=penalty)
 x_sample.append(x)
 
 # orthogonality condition test
@@ -73,18 +73,18 @@ e = sum(pi[i,j] * np.dot(x[i], (y[j] - x[i])) for i in range(m) for j in range(n
 print(f'E[ X . epsilon ] = {e:0.8f}')
 
 # plot individual curve
-fig, ax = pl.subplots(figsize=[8, 6])
-ax.set_title(f'Curve, penalty = {penalty}')
-ax.axis('equal')
-ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
-ax.scatter(x=x[:,0], y=x[:,1], s=12, color='red', alpha=.5)
-ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
-for i in range(m):
-  for j in range(n):
-      ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
+# fig, ax = pl.subplots(figsize=[8, 6])
+# ax.set_title(f'Curve, penalty = {penalty}')
+# ax.axis('equal')
+# ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+# ax.scatter(x=x[:,0], y=x[:,1], s=12, color='red', alpha=.5)
+# ax.plot(x[:,0], x[:,1], color='red', alpha=.5)
+# for i in range(m):
+#   for j in range(n):
+#       ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())
 
 # plot pca and two curves, no transport lines
-fig, ax = pl.subplots(figsize=[8, 4])
+fig, ax = pl.subplots(figsize=[8, 6])
 ax.set_prop_cycle(cc) 
 ax.set_title('Curves and PCA')
 ax.axis('equal')
@@ -177,7 +177,7 @@ for i in range(m):
 
 # fit
 penalty = .02
-x, pi, exy_series = wkm.fit(y, m, 'curve', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=penalty)
+x, pi, exy_series = wkm.fit(y, m, 'curvature', x0=x, pi0=pi, epochs=500, verbose=True, curve_penalty=penalty)
 
 # plot
 fig, ax = pl.subplots(figsize=[8, 6])
@@ -192,23 +192,3 @@ for i in range(m):
 
 
 
-
-
-# bounded length
-m = n
-B=.4
-
-fig, ax = pl.subplots(figsize=[8, 6])
-ax.axis('equal')
-ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
-for B in [.2, .3, .4, .5]:
-    x0 = x_pca.copy()
-    pi0 = np.eye(m) / m
-    x, pi, exy_series = wkm.fit(y, m, 'bounded_length', x0=x0, pi0=pi0, epochs=5, verbose=False, length=B)
-    
-    # plot
-    ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.5)
-    ax.plot(x[:,0], x[:,1], alpha=.5)
-# for i in range(m):
-#   for j in range(n):
-#       ax.plot((x[i,0], y[j,0]), (x[i,1], y[j,1]), color='green', alpha=.5, linewidth=20*pi[i,j]*0.1/pi.max())

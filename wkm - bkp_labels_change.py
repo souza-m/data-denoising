@@ -23,7 +23,7 @@ notation:
 
 # --- main function ---
 
-fit_methods = ['kmeans_fixed', 'kmeans_variable', 'curvature', 'length']
+fit_methods = ['fixed_u', 'variable_u', 'curve', 'length']
 def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwargs):
     
     # initialize and centralize
@@ -36,10 +36,10 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     obj_series = []
     
     # principal curve with bounded curvature
-    if method == 'curvature':
+    if method == 'curve':
 
         # parameters
-        curvature_penalty = kwargs.get('curvature_penalty', 0)
+        curve_penalty = kwargs.get('curve_penalty', 0)
         alpha = .0001
         if x0 is None or pi0 is None:
             raise ValueError('initial position and transport plan must be provided')
@@ -53,8 +53,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # iterate
         for epoch in range(epochs):
-            _xh = update_xh(pi, _y, method='curvature', xh0=xh, curvature_penalty=curvature_penalty, alpha=alpha)
-            _xh = update_xh(pi, _y, 'curvature', xh0 = xh, curvature_penalty = curvature_penalty, alpha = alpha)
+            _xh = update_xh(pi, _y, 'curve', xh, curve_penalty, alpha)
             if epoch % 1000 == 0:
                 d = _xh.shape[1]
                 dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
@@ -65,10 +64,10 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
             xh = _xh
             x = xh * exy(xh, _y, pi)   # rescale
             if epoch % 10 == 0:
-                if False:# m == n:
+                if m == n:
                     pi = update_pi(xh, _y, 'nearest', pi0)
                 else:
-                    pi = update_pi(xh, _y, 'sinkhorn_fixed', pi0, u, v)
+                    pi = update_pi(xh, _y, 'sinkhorn_fixed_u', pi0, u, v)
             
             # report
             EXX = exx(x, pi.sum(axis=1))
@@ -81,7 +80,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
                 print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
     
-    # principal curve with bounded length
+    # principal curve with bounded curvature
     elif method == 'length':
         
         # bound
@@ -92,7 +91,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         if x0 is None:
             # form some random pi
             pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
-            xh = update_xh(pi, _y, 'length', B=B)
+            xh = update_xh(pi, _y, 'bounded_length', B=B)
         else:
             # given
             x = x0
@@ -100,8 +99,8 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # iterate
         for epoch in range(epochs):
-            pi = update_pi(xh, _y, 'sinkhorn_fixed', u=u, v=v)
-            xh = update_xh(pi, _y, 'length', B=B)
+            pi = update_pi(xh, _y, 'sinkhorn_fixed_u', u=u, v=v)
+            xh = update_xh(pi, _y, 'bounded_length', B=B)
             x = xh * exy(xh, _y, pi)   # rescale
             
             # report
@@ -115,8 +114,8 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
                 print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
 
-    # k-means
-    elif method in ['kmeans_fixed', 'kmeans_variable']:
+    # k-means with fixed weights
+    elif method in ['fixed_u', 'variable_u']:
         
         # initial position
         if x0 is None:
@@ -130,8 +129,8 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # iterate
         for epoch in range(epochs):
-            if method == 'kmeans_fixed':
-                pi = update_pi(xh, _y, 'sinkhorn_fixed', u=u, v=v)
+            if method == 'fixed_u':
+                pi = update_pi(xh, _y, 'sinkhorn_fixed_u', u=u, v=v)
             else:
                 pi = update_pi(xh, _y, 'lp_free_u', v=v)
             xh = update_xh(pi, _y, 'direct')
@@ -148,6 +147,81 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
                 print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
     
+    # # k-means with variable weights
+    # elif method == 'variable_u':
+        
+    #     # initial position
+    #     if x0 is None:
+    #         # form initial pi
+    #         pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
+    #         xh = update_xh(pi, _y, 'direct')
+    #     else:
+    #         # given
+    #         x = x0
+    #         xh = x / np.sqrt(exx(x))
+        
+    #     # iterate
+    #     for epoch in range(epochs):
+    #         pi = update_pi(xh, _y, 'sinkhorn_fixed_u', u=u, v=v)
+    #         xh = update_xh(pi, _y, 'direct')
+    #         x = xh * exy(xh, _y, pi)   # rescale
+            
+    #         # report
+    #         EXX = exx(x, pi.sum(axis=1))
+    #         EYY = exx(_y)
+    #         EXY = exy(x, _y, pi)    
+    #         obj_series.append(EXY)
+    #         if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
+    #             r = EXY / np.sqrt(EXX * EYY)
+    #             R2 = r ** 2
+    #             zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
+    #             print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
+    
+    # elif method == 'self_consistent_pca':
+    #     a = kwargs.get('principal_direction', None)
+    #     if a is None:
+    #         raise ValueError('principal_direction must be provided')
+    #     _a = a / np.linalg.norm(a) ** 2
+    #     # projection matrix
+    #     # A = np.dot(a.reshape([len(a), 1]), a.reshape([1, len(a)])) / (np.linalg.norm(a) ** 2)
+        
+    #     # optimize on lamb and pi
+    #     # x_i = lamb_i * a
+    #     np.random.seed(1)
+        
+    #     # initial position (not in convex order)
+    #     lamb = np.random.normal(size=m) / np.sqrt(m)
+    #     xh = lamb[:,None] * _a[None,:]
+    #     xh = xh - xh.mean(axis=0)[None,:]
+        
+    #     # we are interested in the projection of yhat to the principal axis
+    #     # _yp = np.vstack([np.dot(A, _y[j,:]) for j in range(n)])
+        
+    #     for epoch in range(epochs):
+    #         pi = update_pi(xh, _y, 'sinkhorn_fixed_u', u=u, v=v)
+    #         yhat = np.dot(pi, _y)
+    #         # yhat = np.vstack([np.dot(A, yhat[j,:]) for j in range(n)])
+    #         C = np.vstack([np.dot(_a, yhat[j,:]) for j in range(n)])
+    #         lamb = ellipse_max(C, u, centered=True)
+    #         print(lamb.shape)
+    #         lamb = lamb.reshape(n)
+    #         print(lamb.shape)
+    #         xh = lamb[:,None] * _a[None,:]
+    #         print(xh.shape)
+    #         x = xh * exy(xh, _y, pi)   # rescale
+            
+    #         # report
+    #         EXX = exx(x, pi.sum(axis=1))
+    #         EYY = exx(_y)
+    #         EXY = exy(x, _y, pi)    
+    #         obj_series.append(EXY)
+    #         if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
+    #             r = EXY / np.sqrt(EXX * EYY)
+    #             R2 = r ** 2
+    #             zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
+    #             print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
+        
+    
     else:
         print('--- not implemented ---')
     
@@ -160,22 +234,22 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
 # --- optimization functions ---
 
 # update xh
-xh_methods = ['direct', 'curvature', 'length']
-def update_xh(pi, y, method, xh0 = None, curvature_penalty = 0, B = 0, alpha = 1):
+xh_methods = ['direct', 'curve', 'bounded_length']
+def update_xh(pi, y, method, xh0 = None, curve_penalty = 0, B = 0, alpha = 1):
     m, n = pi.shape
     _, d = y.shape
     u = pi.sum(axis=1)
     
     # find new xh
     yhat = np.dot(pi, y)
-    if method == 'direct' or (method == 'curvature' and curvature_penalty == 0):
+    if method == 'direct' or (method == 'curve' and curve_penalty == 0):
         _xh = ellipse_max(yhat, u, centered=True)
-    elif method == 'curvature':
+    elif method == 'curve':
         if xh0 is None:
             print('--- error: xh0 must be given')
-        penalty = curvature_penalty * phi(xh0)  # linear penalization based on previous xh
+        penalty = curve_penalty * phi(xh0)  # linear penalization based on previous xh
         _xh = ellipse_max(yhat - penalty, u)
-    elif method == 'length':
+    elif method == 'bounded_length':
         print('update_xh: B = ', B)
         _xh = qp_length(yhat, B)
         xh_secmom = sum((u[:,None] * _xh ** 2).sum(axis=0))
@@ -303,7 +377,7 @@ def phi(xh0):
 # call appropriate method to optimize pi
 # check constraints
 # update (partially if alpha < 1)
-pi_methods = ['lp_free_u', 'sinkhorn_fixed', 'nearest']
+pi_methods = ['lp_free_u', 'sinkhorn_fixed_u', 'nearest']
 def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
     d, _d = xh.shape[1], y.shape[1]
     assert d == _d, 'dimension mismatch'
@@ -314,7 +388,7 @@ def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
             return
         C = distance_matrix(xh, y)
         _pi = nearest_pi(C, pi0)
-    elif method == 'sinkhorn_fixed':
+    elif method == 'sinkhorn_fixed_u':
         # rescale y in order to use a common entropy penalty parameter to Sinkhorn
         # notice that xh is already normalized
         _y = y / np.sqrt(exx(y))
