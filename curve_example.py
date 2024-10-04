@@ -17,7 +17,6 @@ cc = cycler('color', ['#A60628', '#348ABD', '#D55E00', '#467821', '#7A68A6', '#C
 
 # principal curve examples - bounded curvature
 
-
 # air quality data
 air = pd.read_csv('data/airquality.csv')
 air = air[['Ozone', 'Temp']].dropna()
@@ -65,6 +64,12 @@ x_sample.append(x)
 x0 = x_pca.copy()
 pi = np.eye(m) / m
 penalty = .002
+x, pi, exy_series = wkm.fit(y, m, 'curvature', x0=x0, pi0=pi, epochs=500, verbose=True, curvature_penalty=penalty)
+x_sample.append(x)
+
+x0 = x_pca.copy()
+pi = np.eye(m) / m
+penalty = .001
 x, pi, exy_series = wkm.fit(y, m, 'curvature', x0=x0, pi0=pi, epochs=500, verbose=True, curvature_penalty=penalty)
 x_sample.append(x)
 

@@ -29,7 +29,7 @@ x_pca = pca.inverse_transform(f)   # pca.mean_ + f * pca.components_
 n = len(y)
 
 # reorder x and pi in the order of the principal axis
-order = np.argsort(f[:,0])
+order = np.argsort(f[:,0])      mjnn bn   xbm bb,  `1`1x 1x
 x_pca = x_pca[order]
 y = y[order]
 

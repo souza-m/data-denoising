@@ -86,12 +86,14 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # bound
         B = kwargs.get('length', 0)
-        print('fit: B = ', B)
+        # _B = 1.
+        print('B', B)
         
         # initial position
         if x0 is None:
             # form some random pi
             pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
+            # xh = update_xh(pi, _y, 'length', B=B)
             xh = update_xh(pi, _y, 'length', B=B)
         else:
             # given
@@ -100,6 +102,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # iterate
         for epoch in range(epochs):
+            # _B = 1. - (1. - B) * (epoch + 1) / epochs
             pi = update_pi(xh, _y, 'sinkhorn_fixed', u=u, v=v)
             xh = update_xh(pi, _y, 'length', B=B)
             x = xh * exy(xh, _y, pi)   # rescale

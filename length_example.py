@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as pl
 from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 import wkm
 
 from cycler import cycler
@@ -28,8 +29,8 @@ def rho_step_2d(n):
     return p
 
 d = 2
-n = 200
-m = n
+n = 500
+m = 400
 
 np.random.seed(1)
 noise_var = .01
@@ -44,7 +45,7 @@ x_pca = pca.inverse_transform(f)   # pca.mean_ + f * pca.components_
 order = np.argsort(f[:,0])
 x_pca = x_pca[order]
 
-length_parameter = [.1, .2, .3]
+length_parameter = [.1, .125, .15, .175, .2]
 curvature_parameter = [.0005, .0002, .0001, .00004]
 
 
@@ -72,7 +73,7 @@ curvature_parameter = [.05, .002, .001]
 # -- problem -- choose bounded curvature or bounded length --
 
 # bounded curvature
-
+m = n
 parameter = curvature_parameter
 x_list = [x_pca]
 for penalty in parameter:
@@ -82,30 +83,67 @@ for penalty in parameter:
 
 # bounded length
 
+m = n
 parameter = length_parameter
 x_list = []
 for B in parameter:
     x, pi, exy_series = wkm.fit(y, m, 'length', x0=x_pca, pi0 = np.eye(m) / m, epochs=5, verbose=False, length=B)
     x_list.append(x)
 
+old_x_list = x_list.copy()
+# -- plot -- 
 
-# -- plot --
-
-# selection = [0, 3]
-# _parameter = [parameter[i] for i in selection]
-# _x_list = [x_list[0]] + [x_list[i+1] for i in selection]
 _parameter = parameter
 _x_list = x_list
-fig, ax = pl.subplots(figsize=[8, 6])
+# _x_list = x_sample
+# _parameter = [parameter[0], parameter[2], parameter[4]]
+# _x_list = [x_list[0], x_list[2], x_list[4]]
+fig, ax = pl.subplots(figsize=[8, 5])
 ax.axis('equal')
 ax.set_prop_cycle(cc)
 for x in _x_list:
-    ax.plot(x[:,0], x[:,1], alpha=.85)
-# ax.legend(['PCA'] + [f'{p:0.4f}' for p in _parameter])
-ax.legend([f'{p:0.4f}' for p in _parameter])
-for x in _x_list:
-    ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.75)
+    ax.plot(x[:,0], x[:,1], linewidth=2.5, alpha=.85)
+# ax.legend(['PCA'] + [f'{p:0.1f}' for p in _parameter])
+ax.legend([f'{p:0.2f}' for p in _parameter])
+# for x in _x_list:
+#     ax.scatter(x=x[:,0], y=x[:,1], s=12, alpha=.75)
 ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+
+x_list[0][:5]
+x_list[1][:5]
+x_list[2][:5]
+# k-means w/ fixed weights
+# m = 40   # air
+m = 100   # step
+x, pi, exy_series = wkm.fit(y, m, 'kmeans_fixed', epochs=5, verbose=True)
+order = np.argsort(x.sum(axis=1))    # manual ordering
+x = x[order]
+x_list = [x]
+u = np.ones(m) / m   # weights
+
+# reguar k-means (free weights) -- Lloyd's
+kmeans = KMeans(n_clusters=m, random_state=0).fit(y)
+kc = kmeans.predict(y)
+uk = 1. * np.array([(kc == i).sum() for i in set(kc)])
+uk /= uk.sum()   # weights
+x_km = kmeans.cluster_centers_
+
+# -- plot -- 
+# _parameter = parameter
+_x_list = x_list
+fig, ax = pl.subplots(figsize=[8, 5])
+ax.axis('equal')
+ax.set_prop_cycle(cc)
+for x in _x_list:
+    ax.scatter(x=x[:,0], y=x[:,1], s= 700 * u, alpha=.75)
+    ax.scatter(x=x_km[:,0], y=x_km[:,1], s= 1700 * uk, alpha=.75)
+ax.legend(['fixed weights', 'free weights'])
+ax.scatter(x=y[:,0], y=y[:,1], s=12, marker='s', color='black', alpha=.25)
+ax.scatter(x=p[:,0], y=p[:,1], s=4, marker='s', color='yellow')
+ax.set_prop_cycle(cc)
+for x in _x_list:
+    ax.scatter(x=x[:,0], y=x[:,1], s= 700 * u, alpha=.5)
+    ax.scatter(x=x_km[:,0], y=x_km[:,1], s= 1700 * uk, alpha=.5)
 
 
 # -- save --
