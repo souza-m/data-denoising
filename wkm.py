@@ -59,12 +59,12 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 d = _xh.shape[1]
                 dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
                 print(dif)
-                if dif < 1e-5:
+                if dif < 1e-4:
                     print('convergence achieved')
                     break
             xh = _xh
             x = xh * exy(xh, _y, pi)   # rescale
-            if epoch % 10 == 0:
+            if epoch % 10000 == 0:
                 if False:# m == n:
                     pi = update_pi(xh, _y, 'nearest', pi0)
                 else:
