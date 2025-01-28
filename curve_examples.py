@@ -107,17 +107,16 @@ if _load:
 # -- plots -- 
 
 color_cycle = ['#E7D046', '#1965B0', '#DC050C', '#F1932D', '#4EB265', '#F6C141'] # https://personal.sron.nl/~pault/#fig:scheme_rainbow_discrete -- numbers 10, 15, 18, 20, 26
+pl.rcParams['text.usetex'] = True
+cc = cycler('color', color_cycle)
+
+
 
 # select a few curves to be plotted
-
 select_parameter = [parameter[i] for i in [0, 2, 4]]
 select_x_list = [x_list[i] for i in [0, 2, 4]]
 
-
 # show
-
-pl.rcParams['text.usetex'] = True
-cc = cycler('color', color_cycle)
 fig, ax = pl.subplots(figsize=[7, 5])
 ax.axis('equal')
 ax.set_prop_cycle(cc)
@@ -133,29 +132,31 @@ ax.legend(['Data points'] + [f'R = {p:0.2f}' for p in select_parameter])
 
 # subplots with both examples side by side
 
+# first run ex. 1 and this
 x_list0 = x_list.copy()
-parameter0 = parameter.copy()
-x_list1 = x_list.copy()
-parameter1 = parameter.copy()
 x_list0 = [x_list0[i] for i in [0, 2, 4]]
-x_list1 = [x_list1[i] for i in [0, 2, 4]]
+parameter0 = parameter.copy()
 parameter0 = [parameter0[i] for i in [0, 2, 4]]
+
+# then run ex. 2 and this
+x_list1 = x_list.copy()
+x_list1 = [x_list1[i] for i in [0, 2, 4]]
+parameter1 = parameter.copy()
 parameter1 = [parameter1[i] for i in [0, 2, 4]]
 
-
-fig, ax = pl.subplots(1, 2, sharey=True, figsize=[10, 4])
-
+# now plot both copies
+fig, ax = pl.subplots(1, 2, sharey=False, figsize=[10, 4])
 ax[0].axis('equal')
 ax[0].set_prop_cycle(cc)
 ax[0].scatter(x=y[:,0], y=y[:,1], s=13, marker='s', color='black', alpha=.25)
 for x in x_list0:
     ax[0].plot(x[:,0], x[:,1], linewidth=2.5, alpha=.85)
-ax[0].legend(['Data points'] + [f'R = {p:0.2f}' for p in parameter0])   # length
+ax[0].legend(['Data points'] + [f'B = {p:0.2f}' for p in parameter0])   # length
 
 ax[1].axis('equal')
 ax[1].set_prop_cycle(cc)
 ax[1].scatter(x=y[:,0], y=y[:,1], s=13, marker='s', color='black', alpha=.25)
 for x in x_list1:
     ax[1].plot(x[:,0], x[:,1], linewidth=2.5, alpha=.85)
-ax[1].legend(['Data points', 'PCA'] + [f'B = {p:0.0E}' for p in select_parameter[1:]])   # curvature
-fig.tight_layout()
+ax[1].legend(['Data points', 'PCA'] + [f'$\lambda$ = {p:0.0E}' for p in parameter1[1:]])   # curvature
+# fig.tight_layout()

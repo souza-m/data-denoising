@@ -53,7 +53,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         
         # iterate
         for epoch in range(epochs):
-            _xh = update_xh(pi, _y, method='curvature', xh0=xh, curvature_penalty=curvature_penalty, alpha=alpha)
+            # _xh = update_xh(pi, _y, method='curvature', xh0=xh, curvature_penalty=curvature_penalty, alpha=alpha)
             _xh = update_xh(pi, _y, 'curvature', xh0 = xh, curvature_penalty = curvature_penalty, alpha = alpha)
             if epoch % 1000 == 0:
                 d = _xh.shape[1]
