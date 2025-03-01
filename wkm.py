@@ -10,6 +10,10 @@ from scipy.optimize import linprog as lp
 import sinkhorn
 from sklearn import metrics
 
+from cvxopt import solvers, matrix
+solvers.options['show_progress'] = False
+
+
 '''
 notation:
     y  (n,d) is the noisy data (input)
@@ -59,7 +63,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 d = _xh.shape[1]
                 dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
                 print(dif)
-                if dif < 1e-4:
+                if epoch > 0 and dif < 1e-4:
                     print('convergence achieved')
                     break
             xh = _xh
@@ -234,8 +238,6 @@ def ellipse_max(C, u, centered = False):
     assert np.isclose((u[:,None] * xh).sum(axis=0), np.zeros(d), atol=1e-6).all(), 'error: xh not centered'
     assert np.isclose((u[:,None] * (xh ** 2)).sum(), 1), 'error: var(xh) != 1'
     return xh
-
-from cvxopt import solvers, matrix
 
 def qp_length(C, B):
     print('qp_length: B = ', B)

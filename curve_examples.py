@@ -24,7 +24,7 @@ def rho_step_2d(n):
     return p
 
 d = 2
-n = 300
+n = 1000
 # m = 500
 
 np.random.seed(1)
@@ -48,13 +48,14 @@ x_pca = x_pca[order]
 m = n
 x_list = []
 
-_compute = False
-_dump = False
-_load = True
+_compute = True
+_dump = True
+_load = False
 _path = './model_dump/bounded_length_step_x_list.pickle'
 
 if _compute:
-    parameter = [.1, .125, .15, .175, .2]
+    # parameter = [.1, .125, .15, .175, .2]
+    parameter = [.1, .15, .2]
     for B in parameter:
         x, pi, exy_series = wkm.fit(y, m, 'length', x0=x_pca, pi0 = np.eye(m) / m, epochs=5, verbose=False, length=B)
         x_list.append(x)
@@ -71,6 +72,12 @@ if _load:
     print('x_list and parameter loaded from ' + _path)
     x_list = DF['x_list']
     parameter = DF['parameter']
+    
+# first run ex. 1 and this
+x_list0 = x_list.copy()
+# x_list0 = [x_list0[i] for i in [0, 2, 4]]
+parameter0 = parameter.copy()
+# parameter0 = [parameter0[i] for i in [0, 2, 4]]
 
 
 # 2. bounded curvature
@@ -78,13 +85,14 @@ if _load:
 m = n
 x_list = [x_pca]
 
-_compute = False
-_dump = False
-_load = True
+_compute = True
+_dump = True
+_load = False
 _path = './model_dump/bounded_curvature_step_x_list.pickle'
 
 if _compute:
-    parameter = [.0005, .0002, .0001, .00004]
+    # parameter = [.0005, .0002, .0001, .00004]
+    parameter = [1e-4, 1e-5]
     for penalty in parameter:
         # x, pi, exy_series = wkm.fit(y, m, 'curvature', x0=x0, pi0=pi, epochs=500, verbose=True, curvature_penalty=penalty)
         x, pi, exy_series = wkm.fit(y, m, 'curvature', x0=x_pca, pi0 = np.eye(m) / m, epochs=50000, verbose=False, curvature_penalty=penalty)
@@ -102,6 +110,12 @@ if _load:
     print('x_list and parameter loaded from ' + _path)
     x_list = DF['x_list']
     parameter = DF['parameter']
+
+# then run ex. 2 and this
+x_list1 = x_list.copy()
+# x_list1 = [x_list1[i] for i in [0, 2, 4]]
+parameter1 = parameter.copy()
+# parameter1 = [parameter1[i] for i in [0, 2, 4]]
 
 
 # -- plots -- 
