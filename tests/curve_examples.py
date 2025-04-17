@@ -11,7 +11,7 @@ from sklearn.decomposition import PCA
 import pickle
 from cycler import cycler
 
-import wkm
+from src import wkm
 
 
 # --- data set - step graph ---

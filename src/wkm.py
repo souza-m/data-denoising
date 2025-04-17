@@ -7,10 +7,12 @@ Created on Sep-2023
 
 import numpy as np
 from scipy.optimize import linprog as lp
-import sinkhorn
+from lib import sinkhorn
 from sklearn import metrics
 
 from cvxopt import solvers, matrix
+
+# make cvxopt less verbose
 solvers.options['show_progress'] = False
 
 
