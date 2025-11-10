@@ -7,6 +7,9 @@ Created on Sep-2023
 
 import numpy as np
 from scipy.optimize import linprog as lp
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 from lib import sinkhorn
 from sklearn import metrics
 
@@ -29,8 +32,9 @@ notation:
 
 # --- main function ---
 
-fit_methods = ['kmeans_fixed', 'kmeans_variable', 'curvature', 'length']
+fit_methods = ['kmeans_fixed', 'kmeans_variable', 'curvature', 'curvature_mtg', 'length', 'length_mtg']
 def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwargs):
+    print('fit', method)
     
     # initialize and centralize
     n = len(y)
@@ -43,6 +47,52 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     
     # principal curve with bounded curvature
     if method == 'curvature':
+
+        # parameters
+        curvature_penalty = kwargs.get('curvature_penalty', 0)
+        alpha = .0001
+        if x0 is None or pi0 is None:
+            raise ValueError('initial position and transport plan must be provided')
+        if exx(x0) == 0:
+            raise ValueError('initial position must have positive variance')
+            
+        # initial position and transport plan
+        pi = pi0
+        xh = x / np.sqrt(exx(x))
+        x = xh * exy(xh, _y, pi)   # rescale
+        
+        # iterate
+        for epoch in range(epochs):
+            # _xh = update_xh(pi, _y, method='curvature', xh0=xh, curvature_penalty=curvature_penalty, alpha=alpha)
+            _xh = update_xh(pi, _y, 'curvature', xh0 = xh, curvature_penalty = curvature_penalty, alpha = alpha)
+            if epoch % 1000 == 0:
+                d = _xh.shape[1]
+                dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
+                print(dif)
+                if epoch > 0 and dif < 1e-4:
+                    print('convergence achieved')
+                    break
+            xh = _xh
+            x = xh * exy(xh, _y, pi)   # rescale
+            if epoch % 10000 == 0:
+                if False:# m == n:
+                    pi = update_pi(xh, _y, 'nearest', pi0)
+                else:
+                    pi = update_pi(xh, _y, 'sinkhorn_fixed', pi0, u, v)
+            
+            # report
+            EXX = exx(x, pi.sum(axis=1))
+            EYY = exx(_y)
+            EXY = exy(x, _y, pi)    
+            obj_series.append(EXY)
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%100 == 0):
+                r = EXY / np.sqrt(EXX * EYY)
+                R2 = r ** 2
+                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
+                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
+    
+    # principal curve with bounded curvature
+    if method == 'curvature_mtg':
 
         # parameters
         curvature_penalty = kwargs.get('curvature_penalty', 0)
@@ -109,7 +159,44 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         # iterate
         for epoch in range(epochs):
             # _B = 1. - (1. - B) * (epoch + 1) / epochs
-            pi = update_pi(xh, _y, 'sinkhorn_fixed', u=u, v=v)
+            pi = update_pi(xh, _y, 'martingale', u=u, v=v)
+            xh = update_xh(pi, _y, 'length', B=B)
+            x = xh * exy(xh, _y, pi)   # rescale
+            
+            # report
+            EXX = exx(x, pi.sum(axis=1))
+            EYY = exx(_y)
+            EXY = exy(x, _y, pi)    
+            obj_series.append(EXY)
+            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
+                r = EXY / np.sqrt(EXX * EYY)
+                R2 = r ** 2
+                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
+                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
+
+    # principal curve with bounded length mtg
+    elif method == 'length_mtg':
+        
+        # bound
+        B = kwargs.get('length', 0)
+        # _B = 1.
+        print('B', B)
+        
+        # initial position
+        if x0 is None:
+            # form some random pi
+            pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
+            # xh = update_xh(pi, _y, 'length', B=B)
+            xh = update_xh(pi, _y, 'length', B=B)
+        else:
+            # given
+            x = x0
+            xh = x / np.sqrt(exx(x))
+        
+        # iterate
+        for epoch in range(epochs):
+            # _B = 1. - (1. - B) * (epoch + 1) / epochs
+            pi = update_pi(xh, _y, 'martingale', u=u, v=v)
             xh = update_xh(pi, _y, 'length', B=B)
             x = xh * exy(xh, _y, pi)   # rescale
             
@@ -310,7 +397,7 @@ def phi(xh0):
 # call appropriate method to optimize pi
 # check constraints
 # update (partially if alpha < 1)
-pi_methods = ['lp_free_u', 'sinkhorn_fixed', 'nearest']
+pi_methods = ['lp_free_u', 'sinkhorn_fixed', 'nearest', 'martingale']
 def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
     d, _d = xh.shape[1], y.shape[1]
     assert d == _d, 'dimension mismatch'
@@ -327,12 +414,17 @@ def update_pi(xh, y, method, pi0 = None, u = None, v = None, alpha = 1):
         _y = y / np.sqrt(exx(y))
         C = crossprod_matrix(xh, _y)
         _pi = sinkhorn.sinkhorn_pi(C, u, v)
+    elif method == 'martingale':
+        # rescale y in order to use a common entropy penalty parameter to Sinkhorn
+        # notice that xh is already normalized
+        _y = y / np.sqrt(exx(y))
+        _pi = find_coupling_martingale(xh, _y, v, lambda_reg=5.5)
     elif method == 'lp_free_u':
         C = crossprod_matrix(xh, y)
         xh_sq = np.sum(xh**2, axis=1)
         _pi = lp_pi(C, v, xh, xh_sq)
     else:
-        print('methods: sinkhorn_fixed, sinkhorn_free, lp_free')
+        print('methods: sinkhorn_fixed, sinkhorn_free, martingale, lp_free')
         return
     
     # update and return
@@ -558,3 +650,75 @@ def crossprod_matrix(x, y):
         C = C - xx * yy
     # (compare) q = -np.array([sum(w * (xh[i, :] * y[j, :]).sum(axis=0)) for i in range(m) for j in range(n)])
     return C
+
+# Find optimal coupling under martingale constraint using QP
+def find_coupling_martingale(x, y, nu, lambda_reg=0.1):
+    """
+    Find optimal transport coupling under martingale constraint.
+    
+    Args:
+        x: (m, d) cluster centers
+        y: (n, d) data points  
+        nu: (n,) marginal weights for y (sum over i of pi[i,j] == nu[j])
+        lambda_reg: regularization parameter for martingale constraint
+    
+    Returns:
+        pi_opt: (m, n) optimal transport matrix
+    """
+    m, n = x.shape[0], y.shape[0]
+    d = y.shape[1]
+    assert x.shape == (m, d)
+    assert y.shape == (n, d)
+    nu = np.asarray(nu, dtype=float).reshape(n,)
+    assert nu.shape == (n,)
+    assert lambda_reg >= 0
+
+    # Precalculate squared distances for linear part
+    dist_squared = np.sum((x[:, None, :] - y[None, :, :])**2, axis=2)  # (m,n)
+
+    # Build QP matrices: 1/2 z^T P z + q^T z
+    # z = vec(pi) with index idx(i,j) = i*n + j
+    # Quadratic part: lambda_reg * sum_i ||Y^T pi_i - x_i||^2
+    Y = y  # (n, d)
+    YYT = Y @ Y.T  # (n, n), PSD
+    P_block = 2.0 * lambda_reg * YYT  # (n,n)
+
+    # Build P as block-diagonal: kron(I_m, P_block)
+    if lambda_reg == 0:
+        P = np.zeros((m*n, m*n))
+    else:
+        P = np.kron(np.eye(m), P_block)
+
+    # Linear term q
+    q = dist_squared.reshape(m*n)
+    if lambda_reg != 0:
+        for i in range(m):
+            q_i = -2.0 * lambda_reg * (Y @ x[i])  # (n,)
+            q[i*n:(i+1)*n] += q_i
+
+    # Inequality constraints: pi >= 0  ->  -I z <= 0
+    G = -np.eye(m*n)
+    h = np.zeros(m*n)
+
+    # Equality constraints: sum_i pi[i,j] = nu[j] for each j
+    A = np.zeros((n, m*n))
+    for j in range(n):
+        for i in range(m):
+            A[j, i*n + j] = 1.0
+    b = nu.copy()
+
+    # Convert to cvxopt matrices
+    P_cvx = matrix(P)
+    q_cvx = matrix(q)
+    G_cvx = matrix(G)
+    h_cvx = matrix(h)
+    A_cvx = matrix(A)
+    b_cvx = matrix(b)
+
+    # Solve
+    sol = solvers.qp(P_cvx, q_cvx, G_cvx, h_cvx, A_cvx, b_cvx)
+
+    z = np.array(sol['x']).reshape(m*n)
+    pi_opt = z.reshape(m, n)
+
+    return pi_opt
