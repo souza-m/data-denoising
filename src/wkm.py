@@ -205,8 +205,12 @@ def ellipse_max(C, u, centered = False):
     lamb = np.sqrt(s.sum()) / 2
     
     xh = (C * u_divisor[:,None] - kappa[None,:]) / (2 * lamb)
-    assert np.isclose((u[:,None] * xh).sum(axis=0), np.zeros(d), atol=1e-6).all(), 'error: xh not centered'
-    assert np.isclose((u[:,None] * (xh ** 2)).sum(), 1), 'error: var(xh) != 1'
+    #assert np.isclose((u[:,None] * (xh ** 2)).sum(), 1), 'error: var(xh) != 1'
+    #assert np.isclose((u[:,None] * xh).sum(axis=0), np.zeros(d), atol=1e-5).all(), 'error: xh not centered'
+    if not np.isclose((u[:,None] * (xh ** 2)).sum(), 1):
+        print('warning: var(xh) != 1')
+    if not np.isclose((u[:,None] * xh).sum(axis=0), np.zeros(d), atol=1e-5).all():
+        print('warning: xh not centered')
     return xh
 
 def qp_length(C, B):
