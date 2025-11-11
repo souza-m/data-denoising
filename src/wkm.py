@@ -32,7 +32,7 @@ notation:
 
 # --- main function ---
 
-fit_methods = ['kmeans_fixed', 'kmeans_variable', 'curvature', 'curvature_mtg', 'length', 'length_mtg']
+fit_methods = ['curvature', 'curvature_mtg', 'length', 'length_mtg']
 def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwargs):
     print('fit', method)
     
@@ -46,7 +46,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
     obj_series = []
     
     # principal curve with bounded curvature
-    if method == 'curvature':
+    if method == 'curvature' or method == 'curvature_mtg':
 
         # parameters
         curvature_penalty = kwargs.get('curvature_penalty', 0)
@@ -69,62 +69,13 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 d = _xh.shape[1]
                 dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
                 print(dif)
-                if epoch > 0 and dif < 1e-4:
+                if epoch > 0 and dif < 1e-5:
                     print('convergence achieved')
                     break
             xh = _xh
             x = xh * exy(xh, _y, pi)   # rescale
             if epoch % 10000 == 0:
-                if False:# m == n:
-                    pi = update_pi(xh, _y, 'nearest', pi0)
-                else:
-                    pi = update_pi(xh, _y, 'sinkhorn_fixed', pi0, u, v)
-            
-            # report
-            EXX = exx(x, pi.sum(axis=1))
-            EYY = exx(_y)
-            EXY = exy(x, _y, pi)    
-            obj_series.append(EXY)
-            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%100 == 0):
-                r = EXY / np.sqrt(EXX * EYY)
-                R2 = r ** 2
-                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
-                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
-    
-    # principal curve with bounded curvature
-    if method == 'curvature_mtg':
-
-        # parameters
-        curvature_penalty = kwargs.get('curvature_penalty', 0)
-        alpha = .0001
-        if x0 is None or pi0 is None:
-            raise ValueError('initial position and transport plan must be provided')
-        if exx(x0) == 0:
-            raise ValueError('initial position must have positive variance')
-            
-        # initial position and transport plan
-        pi = pi0
-        xh = x / np.sqrt(exx(x))
-        x = xh * exy(xh, _y, pi)   # rescale
-        
-        # iterate
-        for epoch in range(epochs):
-            # _xh = update_xh(pi, _y, method='curvature', xh0=xh, curvature_penalty=curvature_penalty, alpha=alpha)
-            _xh = update_xh(pi, _y, 'curvature', xh0 = xh, curvature_penalty = curvature_penalty, alpha = alpha)
-            if epoch % 1000 == 0:
-                d = _xh.shape[1]
-                dif = max(max(np.abs(xh[i,k] - _xh[i,k]) for k in range(d)) for i in range(m))
-                print(dif)
-                if epoch > 0 and dif < 1e-4:
-                    print('convergence achieved')
-                    break
-            xh = _xh
-            x = xh * exy(xh, _y, pi)   # rescale
-            if epoch % 10000 == 0:
-                if False:# m == n:
-                    pi = update_pi(xh, _y, 'nearest', pi0)
-                else:
-                    pi = update_pi(xh, _y, 'sinkhorn_fixed', pi0, u, v)
+                pi = update_pi(xh, _y, 'sinkhorn_fixed', pi0, u, v) if method == 'curvature' else update_pi(xh, _y, 'martingale', pi0, u, v)
             
             # report
             EXX = exx(x, pi.sum(axis=1))
@@ -138,7 +89,7 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
                 print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
     
     # principal curve with bounded length
-    elif method == 'length':
+    elif method == 'length' or method == 'length_mtg':
         
         # bound
         B = kwargs.get('length', 0)
@@ -159,78 +110,8 @@ def fit(y, m, method, x0 = None, pi0 = None, epochs = 1, verbose = False, **kwar
         # iterate
         for epoch in range(epochs):
             # _B = 1. - (1. - B) * (epoch + 1) / epochs
-            pi = update_pi(xh, _y, 'martingale', u=u, v=v)
+            pi = update_pi(xh, _y, 'sinkhorn_fixed', u=u, v=v) if method == 'length' else update_pi(xh, _y, 'martingale', u=u, v=v)
             xh = update_xh(pi, _y, 'length', B=B)
-            x = xh * exy(xh, _y, pi)   # rescale
-            
-            # report
-            EXX = exx(x, pi.sum(axis=1))
-            EYY = exx(_y)
-            EXY = exy(x, _y, pi)    
-            obj_series.append(EXY)
-            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
-                r = EXY / np.sqrt(EXX * EYY)
-                R2 = r ** 2
-                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
-                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
-
-    # principal curve with bounded length mtg
-    elif method == 'length_mtg':
-        
-        # bound
-        B = kwargs.get('length', 0)
-        # _B = 1.
-        print('B', B)
-        
-        # initial position
-        if x0 is None:
-            # form some random pi
-            pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
-            # xh = update_xh(pi, _y, 'length', B=B)
-            xh = update_xh(pi, _y, 'length', B=B)
-        else:
-            # given
-            x = x0
-            xh = x / np.sqrt(exx(x))
-        
-        # iterate
-        for epoch in range(epochs):
-            # _B = 1. - (1. - B) * (epoch + 1) / epochs
-            pi = update_pi(xh, _y, 'martingale', u=u, v=v)
-            xh = update_xh(pi, _y, 'length', B=B)
-            x = xh * exy(xh, _y, pi)   # rescale
-            
-            # report
-            EXX = exx(x, pi.sum(axis=1))
-            EYY = exx(_y)
-            EXY = exy(x, _y, pi)    
-            obj_series.append(EXY)
-            if verbose and (epochs <= 20 or epoch+1 <= 5 or epoch+1 == 10 or (epoch+1)%50 == 0):
-                r = EXY / np.sqrt(EXX * EYY)
-                R2 = r ** 2
-                zero_weights = np.isclose(pi.sum(axis=1), 0, atol=1e-5)
-                print(f'{epoch+1:4d}     R2 = {R2:6.2%}   # nonzero weights = {m - zero_weights.sum():3d} / {m}')
-
-    # k-means
-    elif method in ['kmeans_fixed', 'kmeans_variable']:
-        
-        # initial position
-        if x0 is None:
-            # form some random pi
-            pi = pi0 if not pi0 is None else random_pi(m, n, v=v)
-            xh = update_xh(pi, _y, 'direct')
-        else:
-            # given
-            x = x0
-            xh = x / np.sqrt(exx(x))
-        
-        # iterate
-        for epoch in range(epochs):
-            if method == 'kmeans_fixed':
-                pi = update_pi(xh, _y, 'sinkhorn_fixed', u=u, v=v)
-            else:
-                pi = update_pi(xh, _y, 'lp_free_u', v=v)
-            xh = update_xh(pi, _y, 'direct')
             x = xh * exy(xh, _y, pi)   # rescale
             
             # report
